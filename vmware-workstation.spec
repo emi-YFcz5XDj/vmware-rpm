@@ -1,13 +1,14 @@
 Name: vmware-workstation
 Version: 25H2
 %global build_number 24995812
-Release: 1%{?dist}
+Release: 2%{?dist}
 Summary: VMware Workstation
 License: Proprietary
 URL: https://www.vmware.com
 ExclusiveArch: x86_64
 BuildRequires: sqlite
 AutoReqProv: no
+Provides: vmware = %{VERSION}
 Requires: dkms
 Requires: gtkmm3.0
 Requires: fuse
@@ -78,10 +79,8 @@ BuildRequires: qt5-qtbase
 %endif
 
 %description
-The industry standard for running multiple operating systems as virtual machines on a single PC.
-
-You might need to remove the following folders manually after removing this package:
-/etc/vmware, /etc/vmware-installer, /usr/lib/vmware-installer
+The industry standard for running multiple operating systems as
+virtual machines on a single computer.
 
 %prep
 %{SOURCE0} --extract extracted
