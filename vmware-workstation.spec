@@ -1,14 +1,14 @@
 Name: vmware-workstation
 Version: 25H2
 %global build_number 24995812
-Release: 2%{?dist}
+Release: 4%{?dist}
 Summary: VMware Workstation
 License: Proprietary
 URL: https://www.vmware.com
 ExclusiveArch: x86_64
 BuildRequires: sqlite
 AutoReqProv: no
-Provides: vmware = %{VERSION}
+Provides: vmware = %{VERSION}-%{RELEASE}
 Requires: dkms
 Requires: gtkmm3.0
 Requires: fuse
@@ -26,7 +26,7 @@ Requires: gcr
 
 # Proprietary binary software
 %global debug_package %{nil}
-# vmware-installer bundled libraries fail RPATH check, not much we can do here
+# Bundled libraries fail RPATH check, not much we can do here
 %global __brp_check_rpaths %{nil}
 
 Source0: https://archive.org/download/VMware-Workstation-Full-%{VERSION}-%{build_number}.%{_target_cpu}/VMware-Workstation-Full-%{VERSION}-%{build_number}.%{_target_cpu}.bundle
@@ -62,9 +62,6 @@ Source25: https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso
 Source26: https://packages-prod.broadcom.com/tools/frozen/darwin/darwinPre15.iso
 Source27: UEFIPatch
 
-%global extracted_isos "windows"
-%global downloaded_isos "linux linuxPreGlibc25 netware solaris winPre2k winPreVista winVistaSP1 winVistaSP2"
-
 %bcond keymaps 1
 # Warning: Running macOS guest on non Apple devices is a violation of both Apple and VMware EULA
 %bcond unlocker 0
@@ -75,12 +72,11 @@ BuildRequires: python3
 BuildRequires: qt5-qtbase
 %global fusion_version 13.5.2
 %global fusion_build_number 23775688
-%global fusion_isos "darwin darwinPre15"
 %endif
 
 %description
-The industry standard for running multiple operating systems as
-virtual machines on a single computer.
+The industry standard for running multiple operating systems as virtual
+machines on a single computer. Snatched from AUR for the most part.
 
 %prep
 %{SOURCE0} --extract extracted
@@ -91,22 +87,27 @@ touch database
 sqlite3 database "CREATE TABLE settings(key VARCHAR PRIMARY KEY, value VARCHAR NOT NULL, component_name VARCHAR NOT NULL);"
 sqlite3 database "INSERT INTO settings(key,value,component_name) VALUES('db.schemaVersion','2','vmware-installer');"
 sqlite3 database "CREATE TABLE components(id INTEGER PRIMARY KEY, name VARCHAR NOT NULL, version VARCHAR NOT NULL, buildNumber INTEGER NOT NULL, component_core_id INTEGER NOT NULL, longName VARCHAR NOT NULL, description VARCHAR, type INTEGER NOT NULL);"
+
+iso_version=$(cat "extracted/vmware-tools-windows/manifest.xml" | grep -oPm1 "(?<=<version>)[^<]+")
+sqlite3 database "INSERT INTO components(name,version,buildNumber,component_core_id,longName,description,type) \
+	VALUES('vmware-tools-windows','$iso_version',%{build_number},1,'windows','windows',1);"
 for iso in \
-	%{extracted_isos}
-do
-	iso_version=$(cat "extracted/vmware-tools-$iso/manifest.xml" | grep -oPm1 "(?<=<version>)[^<]+")
-	sqlite3 database "INSERT INTO components(name,version,buildNumber,component_core_id,longName,description,type) \
-		VALUES('vmware-tools-$iso','$iso_version',%{build_number},1,'$iso','$iso',1);"
-done
-for iso in \
-	%{downloaded_isos}
+	linux \
+	linuxPreGlibc25 \
+	netware \
+	solaris \
+	winPre2k \
+	winPreVista \
+	winVistaSP1 \
+	winVistaSP2
 do
 	sqlite3 database "INSERT INTO components(name,version,buildNumber,component_core_id,longName,description,type) \
 		VALUES('vmware-tools-$iso','1',%{build_number},1,'$iso','$iso',1);"
 done
 %if %{with unlocker}
 	for iso in \
-		%{fusion_isos}
+		darwin \
+		darwinPre15
 	do
 		sqlite3 database "INSERT INTO components(name,version,buildNumber,component_core_id,longName,description,type) \
 			VALUES('vmware-tools-$iso','1',%{fusion_build_number},1,'$iso','$iso',1);"
@@ -115,7 +116,10 @@ done
 
 %install
 install -Dm 644 database "%{buildroot}/etc/vmware-installer/database"
-installer_version=$(cat "extracted/vmware-installer/manifest.xml" | grep -oPm1 "(?<=<version>)[^<]+")
+cd extracted
+installer_version=$(cat "vmware-installer/manifest.xml" | grep -oPm1 "(?<=<version>)[^<]+")
+
+# Create directories and copy most files to buildroot.
 mkdir -p \
 	"%{buildroot}/etc"/{pam.d,modprobe.d,vmware} \
 	"%{buildroot}/usr"/{share,bin} \
@@ -123,7 +127,6 @@ mkdir -p \
 	"%{buildroot}/usr/lib"/{vmware/setup,vmware-vix,vmware-ovftool,vmware-installer/"$installer_version",modules-load.d} \
 	"%{buildroot}/usr/share"/{doc/vmware-vix,licenses/"%{NAME}"} \
 	"%{buildroot}/var/lib/vmware/Shared VMs"
-cd extracted
 cp -r \
 	vmware-workstation/share/* \
 	vmware-workstation/man \
@@ -165,11 +168,8 @@ cp -r \
 	vmware-vix-core/include/* \
 	"%{buildroot}/usr/include/vmware-vix"
 
-for iso in \
-	%{extracted_isos}
-do
-	install -Dm 644 "vmware-tools-$iso/$iso.iso" "%{buildroot}/usr/lib/vmware/isos/$iso.iso"
-done
+# Install VMware tools images.
+install -Dm 644 "vmware-tools-windows/windows.iso" "%{buildroot}/usr/lib/vmware/isos/windows.iso"
 install -Dm 644 %{SOURCE1} "%{buildroot}/usr/lib/vmware/isos/linux.iso"
 install -Dm 644 %{SOURCE2} "%{buildroot}/usr/lib/vmware/isos/linuxPreGlibc25.iso"
 install -Dm 644 %{SOURCE3} "%{buildroot}/usr/lib/vmware/isos/netware.iso"
@@ -179,6 +179,7 @@ install -Dm 644 %{SOURCE6} "%{buildroot}/usr/lib/vmware/isos/winPreVista.iso"
 install -Dm 644 %{SOURCE7} "%{buildroot}/usr/lib/vmware/isos/winVistaSP1.iso"
 install -Dm 644 %{SOURCE8} "%{buildroot}/usr/lib/vmware/isos/winVistaSP2.iso"
 
+# Install licences.
 install -Dm 644 "vmware-workstation/doc/EULA" "%{buildroot}/usr/share/doc/vmware-workstation/EULA"
 ln -s "/usr/share/doc/vmware-workstation/EULA" "%{buildroot}/usr/share/licenses/%{NAME}/VMware Workstation - EULA.txt"
 ln -s "/usr/lib/vmware-ovftool/vmware.eula" "%{buildroot}/usr/share/licenses/%{NAME}/VMware OVF Tool - EULA.txt"
@@ -187,23 +188,22 @@ install -Dm 644 "vmware-workstation/doc"/ovftool_open_source_licenses.txt "%{bui
 install -Dm 644 "vmware-vix-core"/open_source_licenses.txt "%{buildroot}/usr/share/licenses/%{NAME}/VMware VIX open source license.txt"
 rm "%{buildroot}/usr/lib/vmware-ovftool"/{vmware-eula.rtf,open_source_licenses.txt,manifest.xml}
 
+# Install misc bootstrap files.
 install -d -m 755 "%{buildroot}/usr/lib/vmware-installer/$installer_version"/{lib/lib,artwork}
 install -Dm 755 %{SOURCE12} "%{buildroot}/usr/lib/vmware-installer/$installer_version/bin/configure-initscript.sh"
-
-install -Dm 644 "vmware-vmx/etc/modprobe.d/modprobe-vmware-fuse.conf" "%{buildroot}/etc/modprobe.d/vmware-fuse.conf"
-
 install -Dm 644 vmware-vmx/extra/modules.xml "%{buildroot}"/usr/lib/vmware/modules/modules.xml
 install -Dm 644 vmware-installer/bootstrap "%{buildroot}"/etc/vmware-installer/bootstrap
 install -Dm 644 %{SOURCE9} "%{buildroot}"/etc/vmware/bootstrap
 install -Dm 644 %{SOURCE10} "%{buildroot}"/etc/vmware-vix/bootstrap
 install -Dm 644 %{SOURCE11} "%{buildroot}"/etc/vmware/config
 
+# TODO: split vmware-keymaps package if necessary
 %if %{with keymaps}
-	rm -r "%{buildroot}/usr/lib/vmware/xkeymap" # FIXME: add vmware-keymaps package if needed
+%else
+	rm -r "%{buildroot}/usr/lib/vmware/xkeymap"
 %endif
 
-echo -e "vmw_vmci\nvmmon" > "%{buildroot}/usr/lib/modules-load.d/vmware.conf"
-
+# Install systemd services.
 install -Dm 644 %{SOURCE14} %{buildroot}/usr/lib/systemd/system/vmware-networks-configuration.service
 install -Dm 644 %{SOURCE15} %{buildroot}/usr/lib/systemd/system/vmware-networks.service
 install -Dm 644 %{SOURCE16} %{buildroot}/usr/lib/systemd/system/vmware-usbarbitrator.service
@@ -275,7 +275,32 @@ sed \
 	-e "s,@@VMWARE_INSTALLER@@,/usr/lib/vmware-installer/$installer_version," \
 	-i "%{buildroot}/etc/vmware-installer/bootstrap"
 
-# Patch up the VMware kernel sources and configure DKMS.
+# Add StartupWMClass attribute to desktop files.
+sed -i '/^StartupNotify=.*/a StartupWMClass=vmware' "%{buildroot}/usr/share/applications/vmware-workstation.desktop"
+sed -i '/^StartupNotify=.*/a StartupWMClass=vmplayer' "%{buildroot}/usr/share/applications/vmware-player.desktop"
+sed -i '/^StartupNotify=.*/a StartupWMClass=vmware-netcfg' "%{buildroot}/usr/share/applications/vmware-netcfg.desktop"
+
+%if %{with unlocker}
+	# Edit unlocker.py to operate on buildroot.
+	sed -i -e "s|/usr/lib/vmware/|%{buildroot}/usr/lib/vmware/|" %{SOURCE23}
+	python3 %{SOURCE23} > /dev/null
+	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI32.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI32.ROM" > /dev/null
+	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI64.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI64.ROM" > /dev/null
+	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI20-32.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI20-32.ROM" > /dev/null
+	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI20-64.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI20-64.ROM" > /dev/null
+	install -Dm 644 %{SOURCE25} "%{buildroot}/usr/lib/vmware/isos/darwin.iso"
+	install -Dm 644 %{SOURCE26} "%{buildroot}/usr/lib/vmware/isos/darwinPre15.iso"
+%endif
+
+# Define environment variables for VMware and remove kernel module tests.
+install -Dm 644 %{SOURCE13} "%{buildroot}/etc/conf.d/vmware"
+for program in vmware vmplayer vmware-tray; do
+	sed -e '/export PRODUCT_NAME/asource /etc/conf.d/vmware' \
+			-e 's/if "$BINDIR"\/vmware-modconfig --appname=.*/if true ||/' \
+			-i "%{buildroot}/usr/bin/$program"
+done
+
+# Patch up the VMware kernel sources and configure kmods.
 %define dkms_dir "%{buildroot}/usr/src/%{NAME}-%{VERSION}"
 install -Dm 644 %{SOURCE19} "%{dkms_dir}/dkms.conf"
 install -Dm 644 %{SOURCE20} "%{dkms_dir}/Makefile"
@@ -288,39 +313,16 @@ patch -p2 --read-only=ignore --directory="%{dkms_dir}/vmmon-only" < %{SOURCE21}
 tar -xf "vmware-vmx/lib/modules/source/vmnet.tar" -C "%{dkms_dir}"
 patch -p2 --read-only=ignore --directory="%{dkms_dir}/vmnet-only" < %{SOURCE22}
 rm -r "%{buildroot}/usr/lib/vmware/modules/source"
-
-%if %{with unlocker}
-	# Edit unlocker.py to operate on buildroot
-	sed -i -e "s|/usr/lib/vmware/|%{buildroot}/usr/lib/vmware/|" %{SOURCE23}
-	python3 %{SOURCE23} > /dev/null
-	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI32.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI32.ROM" > /dev/null
-	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI64.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI64.ROM" > /dev/null
-	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI20-32.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI20-32.ROM" > /dev/null
-	%{SOURCE27} "%{buildroot}/usr/lib/vmware/roms/EFI20-64.ROM" %{SOURCE24} -o "%{buildroot}/usr/lib/vmware/roms/EFI20-64.ROM" > /dev/null
-	install -Dm 644 %{SOURCE25} "%{buildroot}/usr/lib/vmware/isos/darwin.iso"
-	install -Dm 644 %{SOURCE26} "%{buildroot}/usr/lib/vmware/isos/darwinPre15.iso"
-%endif
-
-# Define environment variables for VMware and remove kernel module tests
-install -Dm 644 %{SOURCE13} "%{buildroot}/etc/conf.d/vmware"
-for program in vmware vmplayer vmware-tray; do
-	sed -e '/export PRODUCT_NAME/asource /etc/conf.d/vmware' \
-			-e 's/if "$BINDIR"\/vmware-modconfig --appname=.*/if true ||/' \
-			-i "%{buildroot}/usr/bin/$program"
-done
-
-# Add StartupWMClass attribute to desktop files
-sed -i '/^StartupNotify=.*/a StartupWMClass=vmware' "%{buildroot}/usr/share/applications/vmware-workstation.desktop"
-sed -i '/^StartupNotify=.*/a StartupWMClass=vmplayer' "%{buildroot}/usr/share/applications/vmware-player.desktop"
-sed -i '/^StartupNotify=.*/a StartupWMClass=vmware-netcfg' "%{buildroot}/usr/share/applications/vmware-netcfg.desktop"
+install -Dm 644 "vmware-vmx/etc/modprobe.d/modprobe-vmware-fuse.conf" "%{buildroot}/etc/modprobe.d/vmware-fuse.conf"
+echo -e "vmw_vmci\nvmmon" > "%{buildroot}/usr/lib/modules-load.d/vmware.conf"
 
 %post
-dkms add -m %{NAME} -v %{VERSION} -q
+dkms add -m %{NAME} -v %{VERSION} -q --rpm_safe_upgrade
 dkms build -m %{NAME} -v %{VERSION} -q
-dkms install -m %{NAME} -v %{VERSION} -q --force
+dkms install -m %{NAME} -v %{VERSION} -q
 
 %preun
-dkms remove -m %{NAME} -v %{VERSION} -q --all
+dkms remove -m %{NAME} -v %{VERSION} -q --all --rpm_safe_upgrade
 
 %files
 %license /usr/share/doc/%{NAME}/
@@ -370,5 +372,11 @@ dkms remove -m %{NAME} -v %{VERSION} -q --all
 /usr/src/%{NAME}-%{VERSION}/
 
 %changelog
+* Mon Feb 02 2026 Alice H. <alice.hall0451+vcs@gmail.com>
+- Fix DKMS, organise spec
+
+* Mon Feb 02 2026 Alice H. <alice.hall0451+vcs@gmail.com>
+- Fix database
+
 * Sun Feb 01 2026 Alice H. <alice.hall0451+vcs@gmail.com>
 - Initial Release
