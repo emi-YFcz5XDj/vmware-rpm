@@ -1,7 +1,7 @@
 Name: vmware-workstation
 Version: 25H2
 %global build_number 24995812
-Release: 5%{?dist}
+Release: 6%{?dist}
 Summary: VMware Workstation
 License: Proprietary
 URL: https://www.vmware.com
@@ -322,12 +322,11 @@ sqlite3 "%{buildroot}%{_sysconfdir}/vmware-installer/database" 'select * FROM co
 [ -x "%{buildroot}%{_bindir}/vmware" ] || false
 
 %post
-dkms add -m %{NAME} -v %{VERSION} -q --rpm_safe_upgrade
-dkms build -m %{NAME} -v %{VERSION} -q
-dkms install -m %{NAME} -v %{VERSION} -q
+dkms add -q -m %{NAME} -v %{VERSION} --rpm_safe_upgrade
+dkms install -q -m %{NAME} -v %{VERSION} --all --force || true
 
 %preun
-dkms remove -m %{NAME} -v %{VERSION} -q --all --rpm_safe_upgrade
+dkms remove -q -m %{NAME} -v %{VERSION} --all --rpm_safe_upgrade || true
 
 %files
 %license %{_docdir}/%{NAME}/
@@ -377,6 +376,9 @@ dkms remove -m %{NAME} -v %{VERSION} -q --all --rpm_safe_upgrade
 %{_usrsrc}/%{NAME}-%{VERSION}/
 
 %changelog
+* Mon Mar 16 2026 Alice H. <alice.hall0451+vcs@gmail.com>
+- Suppress DKMS dracut error like NVIDIA and OpenZFS
+
 * Mon Feb 02 2026 Alice H. <alice.hall0451+vcs@gmail.com>
 - Fix DKMS, organise spec
 
