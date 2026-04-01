@@ -1,7 +1,7 @@
 Name: vmware-workstation
-Version: 25H2
-%global build_number 24995812
-Release: 6%{?dist}
+Version: 25H2u1
+%global build_number 25219725
+Release: 1%{?dist}
 Summary: VMware Workstation
 License: Proprietary
 URL: https://www.vmware.com
@@ -23,6 +23,8 @@ Requires: libxml2
 # Also bundled with upstream package
 Requires: gtk3
 Requires: gcr
+# semanage
+Requires: policycoreutils-python-utils
 
 # Proprietary binary software
 %global debug_package %{nil}
@@ -79,6 +81,7 @@ The industry standard for running multiple operating systems as virtual
 machines on a single computer. Snatched from AUR for the most part.
 
 %prep
+chmod +x %{SOURCE0}
 %{SOURCE0} --extract extracted
 
 %build
@@ -322,11 +325,18 @@ sqlite3 "%{buildroot}%{_sysconfdir}/vmware-installer/database" 'select * FROM co
 [ -x "%{buildroot}%{_bindir}/vmware" ] || false
 
 %post
+semanage fcontext --add --type vmware_host_exec_t '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator' 2> /dev/null
+restorecon '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator'
 dkms add -q -m %{NAME} -v %{VERSION} --rpm_safe_upgrade
 dkms install -q -m %{NAME} -v %{VERSION} --all --force || true
 
 %preun
 dkms remove -q -m %{NAME} -v %{VERSION} --all --rpm_safe_upgrade || true
+
+%postun
+if [ $1 -eq 0 ]; then
+	semanage fcontext --delete --type vmware_host_exec_t '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator' 2> /dev/null
+fi
 
 %files
 %license %{_docdir}/%{NAME}/
@@ -376,6 +386,9 @@ dkms remove -q -m %{NAME} -v %{VERSION} --all --rpm_safe_upgrade || true
 %{_usrsrc}/%{NAME}-%{VERSION}/
 
 %changelog
+* Wed Apr 01 2026 Alice H. <alice.hall0451+vcs@gmail.com> - 25h2u1-1
+- Update VMware, fix USB Arbitrator file context
+
 * Mon Mar 16 2026 Alice H. <alice.hall0451+vcs@gmail.com>
 - Suppress DKMS dracut error like NVIDIA and OpenZFS
 
