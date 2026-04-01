@@ -1,7 +1,7 @@
 Name: vmware-workstation
 Version: 25H2u1
 %global build_number 25219725
-Release: 1%{?dist}
+Release: 2%{?dist}
 Summary: VMware Workstation
 License: Proprietary
 URL: https://www.vmware.com
@@ -325,17 +325,17 @@ sqlite3 "%{buildroot}%{_sysconfdir}/vmware-installer/database" 'select * FROM co
 [ -x "%{buildroot}%{_bindir}/vmware" ] || false
 
 %post
-semanage fcontext --add --type vmware_host_exec_t '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator' 2> /dev/null
+semanage fcontext --add --type vmware_host_exec_t '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator'
 restorecon '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator'
 dkms add -q -m %{NAME} -v %{VERSION} --rpm_safe_upgrade
-dkms install -q -m %{NAME} -v %{VERSION} --all --force || true
+dkms install -q -m %{NAME} -v %{VERSION} --force || true
 
 %preun
 dkms remove -q -m %{NAME} -v %{VERSION} --all --rpm_safe_upgrade || true
 
 %postun
 if [ $1 -eq 0 ]; then
-	semanage fcontext --delete --type vmware_host_exec_t '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator' 2> /dev/null
+	semanage fcontext --delete --type vmware_host_exec_t '%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator'
 fi
 
 %files
@@ -386,6 +386,9 @@ fi
 %{_usrsrc}/%{NAME}-%{VERSION}/
 
 %changelog
+* Wed Apr 01 2026 Alice H. <alice.hall0451+vcs@gmail.com> - 25h2u1-2
+- Fix DKMS yet again, remove redundant stderr redirect
+
 * Wed Apr 01 2026 Alice H. <alice.hall0451+vcs@gmail.com> - 25h2u1-1
 - Update VMware, fix USB Arbitrator file context
 
