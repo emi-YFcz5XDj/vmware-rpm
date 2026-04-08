@@ -1,7 +1,7 @@
 Name: vmware-workstation
 Version: 25H2u1
 %global build_number 25219725
-Release: 2%{?dist}
+Release: %autorelease
 Summary: VMware Workstation
 License: Proprietary
 URL: https://www.vmware.com
@@ -386,20 +386,4 @@ fi
 %{_usrsrc}/%{NAME}-%{VERSION}/
 
 %changelog
-* Wed Apr 01 2026 Alice H. <alice.hall0451+vcs@gmail.com> - 25h2u1-2
-- Fix DKMS yet again, remove redundant stderr redirect
-
-* Wed Apr 01 2026 Alice H. <alice.hall0451+vcs@gmail.com> - 25h2u1-1
-- Update VMware, fix USB Arbitrator file context
-
-* Mon Mar 16 2026 Alice H. <alice.hall0451+vcs@gmail.com>
-- Suppress DKMS dracut error like NVIDIA and OpenZFS
-
-* Mon Feb 02 2026 Alice H. <alice.hall0451+vcs@gmail.com>
-- Fix DKMS, organise spec
-
-* Mon Feb 02 2026 Alice H. <alice.hall0451+vcs@gmail.com>
-- Fix database
-
-* Sun Feb 01 2026 Alice H. <alice.hall0451+vcs@gmail.com>
-- Initial Release
+%autochangelog
