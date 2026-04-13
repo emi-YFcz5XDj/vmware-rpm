@@ -1,5 +1,5 @@
 [Unit]
-Description=Monitor to Load-On-Demand the VMware Networks service
+Description=Load the VMware Networks Service on Demand
 
 [Path]
 PathExistsGlob=/var/run/vmware/*/*

@@ -7,7 +7,6 @@ stopLevel="$4"
 
 # Notes:
 # This package does not need a vmware service to make VMware usable, so this script says that vmware service is always started.
-# vmware-workstation-server service is named vmware-hostd in this package.
 
 #echo $serviceName && exit # DEBUG
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Monitor to Load-On-Demand the VMware USB Arbitrator
+Description=Load the VMware USB Arbitrator on demand
 
 [Path]
 PathExistsGlob=/var/run/vmware/*/*

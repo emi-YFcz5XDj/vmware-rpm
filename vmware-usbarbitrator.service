@@ -1,8 +1,9 @@
 [Unit]
 Description=VMware USB Arbitrator
-
-[Service]
-ExecStart=/usr/lib/vmware/bin/vmware-usbarbitrator -f
+Before=multi-user.target
 
 [Install]
 WantedBy=multi-user.target
+
+[Service]
+ExecStart=/usr/lib/vmware/bin/vmware-usbarbitrator -f
