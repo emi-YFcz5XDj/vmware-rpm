@@ -1,5 +1,6 @@
 .vscode/
 VMware-Workstation-Full-*.x86_64.bundle
 *.iso
+*.dmg
 results_*/
 *.rpm

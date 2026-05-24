@@ -1,7 +1,7 @@
 Name: vmware-workstation
-Version: 25H2u1
-%global semantic_version 25.0.1
-%global build_number 25219725
+Version: 26H1
+%global semantic_version 26.0.0
+%global build_number 25388281
 Release: %autorelease
 Summary: VMware Workstation
 License: Proprietary
@@ -26,8 +26,6 @@ Requires: gtk3
 Requires: gcr
 # Required for setting SELinux file context
 Requires: /usr/sbin/semanage
-# TODO: Remove once VMware fixes their libraries
-BuildRequires: patchelf
 
 %global installer_database %{buildroot}%{_sysconfdir}/vmware-installer/database
 %global iso_dir %{buildroot}%{_exec_prefix}/lib/vmware/isoimages
@@ -96,17 +94,7 @@ cd extracted
 install -Dm 755 %{SOURCE12} vmware-installer/bin/configure-initscript.sh
 #region Add StartupWMClass attribute to desktop files
 sed -i '/^StartupNotify=.*/a StartupWMClass=vmware' 'vmware-workstation/share/applications/vmware-workstation.desktop'
-sed -i '/^StartupNotify=.*/a StartupWMClass=vmplayer' 'vmware-player-app/share/applications/vmware-player.desktop'
 sed -i '/^StartupNotify=.*/a StartupWMClass=vmware-netcfg' 'vmware-network-editor-ui/share/applications/vmware-netcfg.desktop'
-#endregion
-#region VMware upgraded bundled libxml2 without rebuilding these against it?
-find \
-	-type f -name 'libcroco-0.6.so.3' \
-	-exec patchelf {} --replace-needed libxml2.so.2 libxml2.so.16 \; -or \
-	-type f -name 'librsvg-2.so.2' \
-	-exec patchelf {} --replace-needed libxml2.so.2 libxml2.so.16 \; -or \
-	-type f -name 'libpixbufloader-svg.so' \
-	-exec patchelf {} --replace-needed libxml2.so.2 libxml2.so.16 \;
 #endregion
 #region Prepare DKMS and Patch the Kernel modules
 mkdir patched
@@ -149,7 +137,7 @@ ln -s ${installer_dir}/vmware-installer %{buildroot}%{_bindir}/vmware-installer
 mkdir -p %{buildroot}%{_sysconfdir}/vmware-installer
 install -Dm 644 bootstrap %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
 sed -i -e "s,@@VMWARE_INSTALLER@@,${installer_dir}," %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
-sed -i -e "s,@@VERSION@@,%{installer_version}," %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
+sed -i -e "s,@@VERSION@@,${installer_version}," %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
 
 register_component()
 {
@@ -219,6 +207,15 @@ sed -i -e "s,@@ETCDIR@@,%{_sysconfdir}/vmware," %{buildroot}%{_bindir}/vmware-mo
 register_component
 popd
 #endregion
+#region VMware Player Setup
+pushd vmware-player-setup
+
+mkdir -p %{buildroot}%{_exec_prefix}/lib/vmware/setup
+cp vmware-config %{buildroot}%{_exec_prefix}/lib/vmware/setup/
+
+register_component
+popd
+#endregion
 #region VMware USB Arbitrator
 pushd vmware-usbarbitrator
 
@@ -230,15 +227,6 @@ install -Dm 644 %{SOURCE18} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmwar
 
 cp -r bin/* %{buildroot}%{_bindir}/
 ln -s appLoader %{buildroot}%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
-
-register_component
-popd
-#endregion
-#region VMware Player Setup
-pushd vmware-player-setup
-
-mkdir -p %{buildroot}%{_exec_prefix}/lib/vmware/setup
-cp vmware-config %{buildroot}%{_exec_prefix}/lib/vmware/setup/
 
 register_component
 popd
@@ -284,22 +272,18 @@ do
 done
 
 #endregion
-#region VMware Player Application
-pushd vmware-player-app
+#region VMware Workstation Other Components
+pushd vmware-other-apps
 
 cp -r lib/* %{buildroot}%{_exec_prefix}/lib/vmware/
 mkdir -p %{buildroot}%{_datadir}
 cp -r share/* %{buildroot}%{_datadir}/
-cp -r bin/* %{buildroot}%{_bindir}/
 ## Licences
 mkdir -p %{buildroot}%{_docdir}/vmware-player
 cp -r doc/* %{buildroot}%{_docdir}/vmware-player/
 
 for target in \
-	vmplayer \
-	vmware-enter-serial \
 	vmware-setup-helper \
-	licenseTool \
 	vmware-mount \
 	vmware-fuseUI \
 	vmware-app-control \
@@ -308,12 +292,9 @@ do
 	ln -s appLoader %{buildroot}%{_exec_prefix}/lib/vmware/bin/$target
 done
 
-ln -s %{_exec_prefix}/lib/vmware/bin/vmware-mount %{buildroot}%{_bindir}/vmware-mount
-ln -s %{_exec_prefix}/lib/vmware/bin/vmware-fuseUI %{buildroot}%{_bindir}/vmware-fuseUI
-ln -s %{_exec_prefix}/lib/vmware/bin/vmrest %{buildroot}%{_bindir}/vmrest
-
-## Replace vmplayer desktop file placeholders
-sed -i -e "s,@@BINARY@@,%{_bindir}/vmplayer," %{buildroot}%{_datadir}/applications/vmware-player.desktop
+ln -s ../lib/vmware/bin/vmware-mount %{buildroot}%{_bindir}/vmware-mount
+ln -s ../lib/vmware/bin/vmware-fuseUI %{buildroot}%{_bindir}/vmware-fuseUI
+ln -s ../lib/vmware/bin/vmrest %{buildroot}%{_bindir}/vmrest
 
 register_component
 popd
@@ -325,7 +306,7 @@ mkdir -p %{buildroot}%{_exec_prefix}/lib/vmware-ovftool/
 
 cp -r * %{buildroot}%{_exec_prefix}/lib/vmware-ovftool/
 chmod 755 %{buildroot}%{_exec_prefix}/lib/vmware-ovftool/ovftool*
-ln -s %{_exec_prefix}/lib/vmware-ovftool/ovftool %{buildroot}%{_bindir}/ovftool
+ln -s ../lib/vmware-ovftool/ovftool %{buildroot}%{_bindir}/ovftool
 
 register_component
 
@@ -337,7 +318,7 @@ pushd vmware-network-editor-ui
 cp -r share/* %{buildroot}%{_datadir}/
 
 ln -s appLoader %{buildroot}%{_exec_prefix}/lib/vmware/bin/vmware-netcfg
-ln -s %{_exec_prefix}/lib/vmware/bin/vmware-netcfg %{buildroot}%{_bindir}/vmware-netcfg
+ln -s ../lib/vmware/bin/vmware-netcfg %{buildroot}%{_bindir}/vmware-netcfg
 
 ## Replace Network Editor UI desktop file placeholders
 sed -i -e "s,@@BINARY@@,%{_bindir}/vmware-netcfg," %{buildroot}%{_datadir}/applications/vmware-netcfg.desktop
@@ -502,10 +483,8 @@ fi
 %{_exec_prefix}/lib/vmware-installer/
 %{_exec_prefix}/lib/vmware-ovftool/
 %{_exec_prefix}/lib/vmware-vix/
-%{_datadir}/appdata/vmware-player.appdata.xml
 %{_datadir}/appdata/vmware-workstation.appdata.xml
 %{_datadir}/applications/vmware-netcfg.desktop
-%{_datadir}/applications/vmware-player.desktop
 %{_datadir}/applications/vmware-workstation.desktop
 %{_datadir}/icons/hicolor/16x16/apps/vmware-netcfg.png
 %{_datadir}/icons/hicolor/16x16/apps/vmware-player.png
@@ -559,7 +538,6 @@ fi
 %{_datadir}/icons/hicolor/scalable/mimetypes/application-x-vmware-vm-legacy.svg
 %{_datadir}/icons/hicolor/scalable/mimetypes/application-x-vmware-vm.svg
 %{_datadir}/icons/hicolor/scalable/mimetypes/application-x-vmware-vmfoundry.svg
-%{_datadir}/mime/packages/vmware-player.xml
 
 %{_usrsrc}/%{NAME}-%{VERSION}/
 
@@ -586,7 +564,6 @@ fi
 %{_bindir}/vmnet-natd
 %{_bindir}/vmnet-netifup
 %{_bindir}/vmnet-sniffer
-%{_bindir}/vmplayer
 %{_bindir}/vmrest
 %{_bindir}/vmrun
 %{_bindir}/vmss2core
@@ -597,8 +574,6 @@ fi
 %{_bindir}/vmware-fuseUI
 %{_bindir}/vmware-gksu
 %{_bindir}/vmware-installer
-%{_bindir}/vmware-license-check.sh
-%{_bindir}/vmware-license-enter.sh
 %{_bindir}/vmware-modconfig
 %{_bindir}/vmware-mount
 %{_bindir}/vmware-netcfg
@@ -617,17 +592,12 @@ fi
 %{_exec_prefix}/lib/vmware/bin/appLoader
 %{_exec_prefix}/lib/vmware/bin/emmett
 %{_exec_prefix}/lib/vmware/bin/fusermount
-%{_exec_prefix}/lib/vmware/bin/licenseTool
 %{_exec_prefix}/lib/vmware/bin/mkisofs
 %{_exec_prefix}/lib/vmware/bin/mksSandbox*
 %{_exec_prefix}/lib/vmware/bin/tpm2emu*
-%{_exec_prefix}/lib/vmware/bin/vmplayer
-%{_exec_prefix}/lib/vmware/bin/vmrest
-%{_exec_prefix}/lib/vmware/bin/vmplayer
 %{_exec_prefix}/lib/vmware/bin/vmrest
 %{_exec_prefix}/lib/vmware/bin/vmware
 %{_exec_prefix}/lib/vmware/bin/vmware-app-control
-%{_exec_prefix}/lib/vmware/bin/vmware-enter-serial
 %{_exec_prefix}/lib/vmware/bin/vmware-fuseUI
 %{_exec_prefix}/lib/vmware/bin/vmware-mount
 %{_exec_prefix}/lib/vmware/bin/vmware-netcfg
