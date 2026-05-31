@@ -3,7 +3,7 @@ Version: 26H1
 %global semantic_version 26.0.0
 %global build_number 25388281
 Release: %autorelease
-Summary: VMware Workstation
+Summary: Desktop Hypervisor
 License: Proprietary
 URL: https://www.vmware.com
 ExclusiveArch: x86_64
@@ -43,37 +43,42 @@ Source3: https://packages-prod.broadcom.com/tools/frozen/netware/netware.iso
 Source4: https://packages-prod.broadcom.com/tools/frozen/solaris/solaris.iso
 Source5: https://packages-prod.broadcom.com/tools/frozen/windows/winPre2k.iso
 Source6: https://packages-prod.broadcom.com/tools/frozen/windows/winPreVista.iso
+
+%bcond vista_sp1 0
+%if %{with vista_sp1}
 Source7: https://packages-prod.broadcom.com/tools/frozen/windows/WindowsToolsVista/SP1/windows.iso#/winVistaSP1.iso
-Source8: https://packages-prod.broadcom.com/tools/frozen/windows/WindowsToolsVista/SP2/windows.iso#/winVistaSP2.iso
+%else
+Source7: https://packages-prod.broadcom.com/tools/frozen/windows/WindowsToolsVista/SP2/windows.iso#/winVistaSP2.iso
+%endif
 
-Source9: vmware-bootstrap
-Source10: vmware-vix-bootstrap
-Source11: vmware-config
-Source12: configure-initscript.sh
-Source13: vmware-modconfig
+Source8: vmware-bootstrap
+Source9: vmware-vix-bootstrap
+Source10: vmware-config
+Source11: configure-initscript.sh
+Source12: vmware-modconfig
 
-Source14: vmware-networks-configuration.service
-Source15: vmware-networks.service
-Source16: vmware-usbarbitrator.service
-Source17: vmware-networks.path
-Source18: vmware-usbarbitrator.path
+Source13: vmware-networks-configuration.service
+Source14: vmware-networks.service
+Source15: vmware-usbarbitrator.service
+Source16: vmware-networks.path
+Source17: vmware-usbarbitrator.path
 
-Source19: dkms.conf.in
-Source20: Makefile
-Source21: vmmon.patch
-Source22: vmnet.patch
-Source23: vmware-modules.conf
-
-Source24: unlocker.py
-Source25: efi-patches.txt
-Source26: https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso
-Source27: https://packages-prod.broadcom.com/tools/frozen/darwin/darwinPre15.iso
-Source28: UEFIPatch
+Source18: dkms.conf.in
+Source19: Makefile
+Source20: vmmon.patch
+Source21: vmnet.patch
+Source22: vmware-modules.conf
 
 # Warning: Running macOS guest on non Apple devices is a violation of both Apple and VMware EULA
 %bcond unlocker 1
 
 %if %{with unlocker}
+Source23: unlocker.py
+Source24: efi-patches.txt
+Source25: https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso
+Source26: https://packages-prod.broadcom.com/tools/frozen/darwin/darwinPre15.iso
+Source27: UEFIPatch
+
 BuildRequires: python3
 # EPEL
 BuildRequires: qt5-qtbase
@@ -82,8 +87,8 @@ BuildRequires: qt5-qtbase
 %endif
 
 %description
-The industry standard for running multiple operating systems as virtual
-machines on a single computer. Snatched from AUR for the most part.
+Run Windows, Linux and BSD virtual machines on a Windows or Linux desktop
+with VMware Workstation Pro, the industry standard desktop hypervisor.
 
 %prep
 chmod +x %{SOURCE0}
@@ -91,7 +96,7 @@ chmod +x %{SOURCE0}
 
 %build
 cd extracted
-install -Dm 755 %{SOURCE12} vmware-installer/bin/configure-initscript.sh
+install -Dm 755 %{SOURCE11} vmware-installer/bin/configure-initscript.sh
 #region Add StartupWMClass attribute to desktop files
 sed -i '/^StartupNotify=.*/a StartupWMClass=vmware' 'vmware-workstation/share/applications/vmware-workstation.desktop'
 sed -i '/^StartupNotify=.*/a StartupWMClass=vmware-netcfg' 'vmware-network-editor-ui/share/applications/vmware-netcfg.desktop'
@@ -101,11 +106,11 @@ mkdir patched
 sed \
 	-e "s/@NAME@/%{NAME}/g" \
 	-e "s/@VERSION@/%{VERSION}/g" \
-	-i "%{SOURCE19}"
+	-i "%{SOURCE18}"
 tar -xf 'vmware-vmx/lib/modules/source/vmmon.tar' -C 'patched'
-patch -p2 --read-only=ignore --directory='patched/vmmon-only' < %{SOURCE21}
+patch -p2 --read-only=ignore --directory='patched/vmmon-only' < %{SOURCE20}
 tar -xf 'vmware-vmx/lib/modules/source/vmnet.tar' -C 'patched'
-patch -p2 --read-only=ignore --directory='patched/vmnet-only' < %{SOURCE22}
+patch -p2 --read-only=ignore --directory='patched/vmnet-only' < %{SOURCE21}
 rm -f vmware-vmx/lib/modules/source/{vmmon,vmnet}.tar
 #endregion
 
@@ -163,10 +168,10 @@ register_component
 popd
 #endregion
 #region VMware Bootstrap
-install -Dm 644 %{SOURCE9} %{buildroot}%{_sysconfdir}/vmware/bootstrap
+install -Dm 644 %{SOURCE8} %{buildroot}%{_sysconfdir}/vmware/bootstrap
 #endregion
 #region VMware Config
-install -Dm 644 %{SOURCE11} %{buildroot}%{_sysconfdir}/vmware/config
+install -Dm 644 %{SOURCE10} %{buildroot}%{_sysconfdir}/vmware/config
 sed -i -e "s,@@VERSION@@,%{semantic_version}," %{buildroot}%{_sysconfdir}/vmware/config
 sed -i -e "s,@@BUILD@@,%{build_number}," %{buildroot}%{_sysconfdir}/vmware/config
 sed -i -e "s,@@PREFIXDIR@@,%{_exec_prefix}," %{buildroot}%{_sysconfdir}/vmware/config
@@ -201,7 +206,7 @@ ln -s appLoader %{buildroot}%{_exec_prefix}/lib/vmware/bin/vmware-vmblock-fuse
 ln -s %{_exec_prefix}/lib/vmware/icu %{buildroot}%{_sysconfdir}/vmware/icu
 
 ## Replace vmware-modconfig with simple error dialog
-install -Dm 755 %{SOURCE13} %{buildroot}%{_bindir}/vmware-modconfig
+install -Dm 755 %{SOURCE12} %{buildroot}%{_bindir}/vmware-modconfig
 sed -i -e "s,@@ETCDIR@@,%{_sysconfdir}/vmware," %{buildroot}%{_bindir}/vmware-modconfig
 
 register_component
@@ -222,8 +227,8 @@ pushd vmware-usbarbitrator
 ## Use custom systemd service
 #cp -r vmware-usbarbitrator/etc/init.d/* %\{buildroot}%\{_exec_prefix}/lib/vmware/scripts/init/
 #install -Dm 644 vmware-usbarbitrator/systemd/vmware-USBArbitrator.service %\{buildroot}%\{_exec_prefix}/lib/systemd/system/vmware-USBArbitrator.service
-install -Dm 644 %{SOURCE16} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.service
-install -Dm 644 %{SOURCE18} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.path
+install -Dm 644 %{SOURCE15} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.service
+install -Dm 644 %{SOURCE17} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.path
 
 cp -r bin/* %{buildroot}%{_bindir}/
 ln -s appLoader %{buildroot}%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
@@ -254,8 +259,7 @@ install -Dm 644 %{SOURCE3} %{iso_dir}/netware.iso
 install -Dm 644 %{SOURCE4} %{iso_dir}/solaris.iso
 install -Dm 644 %{SOURCE5} %{iso_dir}/winPre2k.iso
 install -Dm 644 %{SOURCE6} %{iso_dir}/winPreVista.iso
-install -Dm 644 %{SOURCE7} %{iso_dir}/winVistaSP1.iso
-install -Dm 644 %{SOURCE8} %{iso_dir}/winVistaSP2.iso
+install -Dm 644 %{SOURCE7} %{iso_dir}/winVista.iso
 
 for iso in \
 	linux \
@@ -264,8 +268,7 @@ for iso in \
 	solaris \
 	winPre2k \
 	winPreVista \
-	winVistaSP1 \
-	winVistaSP2
+	winVista
 do
 	sqlite3 %{installer_database} "INSERT INTO components(name,version,buildNumber,component_core_id,longName,description,type) \
 		VALUES('vmware-tools-${iso}','1',%{build_number},1,'${iso}','${iso}',1);"
@@ -332,7 +335,7 @@ mkdir -p %{buildroot}%{_exec_prefix}/lib/vmware-vix
 cp -r lib/* %{buildroot}%{_exec_prefix}/lib/vmware-vix/
 cp -r bin/* %{buildroot}%{_bindir}/
 
-install -Dm 644 %{SOURCE10} %{buildroot}%{_sysconfdir}/vmware-vix/bootstrap
+install -Dm 644 %{SOURCE9} %{buildroot}%{_sysconfdir}/vmware-vix/bootstrap
 
 mkdir -p %{buildroot}%{_includedir}/vmware-vix
 cp -r include/* %{buildroot}%{_includedir}/vmware-vix
@@ -391,29 +394,29 @@ register_component
 popd
 #endregion
 #region VMWare Networks Services
-install -Dm 644 %{SOURCE14} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks-configuration.service
-install -Dm 644 %{SOURCE15} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.service
-install -Dm 644 %{SOURCE17} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.path
+install -Dm 644 %{SOURCE13} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks-configuration.service
+install -Dm 644 %{SOURCE14} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.service
+install -Dm 644 %{SOURCE16} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.path
 #endregion
 #region Configure Kmods
-install -Dm 644 %{SOURCE19} %{dkms_dir}/dkms.conf
-install -Dm 644 %{SOURCE20} %{dkms_dir}/Makefile
+install -Dm 644 %{SOURCE18} %{dkms_dir}/dkms.conf
+install -Dm 644 %{SOURCE19} %{dkms_dir}/Makefile
 cp -r patched/vmmon-only %{dkms_dir}/
 cp -r patched/vmnet-only %{dkms_dir}/
 
-install -Dm 644 %{SOURCE23} %{buildroot}%{_exec_prefix}/lib/modules-load.d/vmware.conf
+install -Dm 644 %{SOURCE22} %{buildroot}%{_exec_prefix}/lib/modules-load.d/vmware.conf
 #endregion
 #region Enable macOS Guests
 %if %{with unlocker}
 	## Edit unlocker.py to operate on buildroot
-	sed -i -e "s|%{_exec_prefix}/lib/vmware/|%{buildroot}%{_exec_prefix}/lib/vmware/|" %{SOURCE24}
-	python3 %{SOURCE24}
-	%{SOURCE28} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI32.ROM %{SOURCE25} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI32.ROM
-	%{SOURCE28} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI64.ROM %{SOURCE25} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI64.ROM
-	%{SOURCE28} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-32.ROM %{SOURCE25} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-32.ROM
-	%{SOURCE28} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-64.ROM %{SOURCE25} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-64.ROM
-	install -Dm 644 %{SOURCE26} %{iso_dir}/darwin.iso
-	install -Dm 644 %{SOURCE27} %{iso_dir}/darwinPre15.iso
+	sed -i -e "s|%{_exec_prefix}/lib/vmware/|%{buildroot}%{_exec_prefix}/lib/vmware/|" %{SOURCE23}
+	python3 %{SOURCE23}
+	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI32.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI32.ROM
+	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI64.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI64.ROM
+	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-32.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-32.ROM
+	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-64.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-64.ROM
+	install -Dm 644 %{SOURCE25} %{iso_dir}/darwin.iso
+	install -Dm 644 %{SOURCE26} %{iso_dir}/darwinPre15.iso
 	for iso in \
 		darwin \
 		darwinPre15
@@ -436,8 +439,7 @@ for iso in \
 	solaris \
 	winPre2k \
 	winPreVista \
-	winVistaSP1 \
-	winVistaSP2
+	winVista
 do
 	test -s %{iso_dir}/${iso}.iso
 done
