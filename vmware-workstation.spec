@@ -1,7 +1,8 @@
 Name: vmware-workstation
 Version: 26H1
-%global semantic_version 26.0.0
-%global build_number 25388281
+%define semantic_version 26.0.0
+%define build_number 25388281
+%define kernel 6.12.0-264.16.1.el10_3
 Release: %autorelease
 Summary: Desktop Hypervisor
 License: Proprietary
@@ -10,7 +11,7 @@ ExclusiveArch: x86_64
 BuildRequires: sqlite
 AutoReqProv: no
 Provides: vmware = %{VERSION}-%{RELEASE}
-Requires: dkms
+Requires: kmod-vmware = %{VERSION}-%{lua: print((rpm.expand('%{kernel}'):gsub('-', '~'):gsub('.el.*', '')))}~%{RELEASE}
 Requires: gtkmm3.0
 Requires: fuse
 Requires: libcanberra
@@ -24,12 +25,12 @@ Requires: libxml2
 # Also bundled with upstream package
 Requires: gtk3
 Requires: gcr
-# Required for setting SELinux file context
-Requires: /usr/sbin/semanage
+Requires(post): %{_sbindir}/semanage
+Requires(postun): %{_sbindir}/semanage
+Requires(post): %{_sbindir}/restorecon
 
-%global installer_database %{buildroot}%{_sysconfdir}/vmware-installer/database
-%global iso_dir %{buildroot}%{_exec_prefix}/lib/vmware/isoimages
-%global dkms_dir %{buildroot}%{_usrsrc}/%{NAME}-%{VERSION}
+%define installer_database %{buildroot}%{_sysconfdir}/vmware-installer/database
+%define iso_dir %{buildroot}%{_exec_prefix}/lib/vmware/isoimages
 
 # Proprietary binary software
 %global debug_package %{nil}
@@ -63,8 +64,6 @@ Source15: vmware-usbarbitrator.service
 Source16: vmware-networks.path
 Source17: vmware-usbarbitrator.path
 
-Source18: dkms.conf.in
-Source19: Makefile
 Source20: vmmon.patch
 Source21: vmnet.patch
 Source22: vmware-modules.conf
@@ -79,40 +78,72 @@ Source25: https://packages-prod.broadcom.com/tools/frozen/darwin/darwin.iso
 Source26: https://packages-prod.broadcom.com/tools/frozen/darwin/darwinPre15.iso
 Source27: UEFIPatch
 
-BuildRequires: python3
+BuildRequires: %{__python3}
 # EPEL
 BuildRequires: qt5-qtbase
-%global fusion_version 13.5.2
-%global fusion_build_number 23775688
+%define fusion_version 13.5.2
+%define fusion_build_number 23775688
 %endif
 
 %description
 Run Windows, Linux and BSD virtual machines on a Windows or Linux desktop
 with VMware Workstation Pro, the industry standard desktop hypervisor.
 
+%package -n kmod-vmware
+%define key /etc/pki/pesign/secure-boot.priv
+%define cert /etc/pki/pesign/secure-boot.cert
+
+Release: %{lua: print((rpm.expand('%{kernel}'):gsub('-', '~'):gsub('.el.*', '')))}~%{RELEASE}
+License: GPL-2.0-only
+Summary: VMware Kernel Modules
+
+BuildRequires:	kernel-rpm-macros
+BuildRequires:	redhat-rpm-config
+BuildRequires:	kernel-modules-uname-r = %{kernel}.%{_arch}
+BuildRequires:	kernel-devel-uname-r = %{kernel}.%{_arch}
+BuildRequires:	kernel-abi-stablelists = %{kernel}
+Provides:	installonlypkg(kernel-module)
+Provides:	kernel-modules >= %{kernel}.%{_arch}
+
+Requires:	kernel-uname-r >= %{kernel}.%{_arch}
+Requires(post):	(kernel-devel-uname-r = %{kernel}.%{_arch} or kernel-devel-sign-only = %{kernel}.%{_arch})
+Requires(post): xz
+Requires(posttrans):	%{_sbindir}/depmod
+Requires(postuntrans):	%{_sbindir}/depmod
+Requires(posttrans):	%{_sbindir}/weak-modules
+Requires(postuntrans):	%{_sbindir}/weak-modules
+Requires(posttrans):	%{_bindir}/sort
+Requires(postuntrans):	%{_bindir}/sort
+
+%description -n kmod-vmware
+This package provides the vmmon and vmnet kernel modules.
+
 %prep
 chmod +x %{SOURCE0}
 %{SOURCE0} --extract extracted
-
-%build
 cd extracted
-install -Dm 755 %{SOURCE11} vmware-installer/bin/configure-initscript.sh
+%{__install} -Dm 755 %{SOURCE11} vmware-installer/bin/configure-initscript.sh
 #region Add StartupWMClass attribute to desktop files
 sed -i '/^StartupNotify=.*/a StartupWMClass=vmware' 'vmware-workstation/share/applications/vmware-workstation.desktop'
 sed -i '/^StartupNotify=.*/a StartupWMClass=vmware-netcfg' 'vmware-network-editor-ui/share/applications/vmware-netcfg.desktop'
 #endregion
-#region Prepare DKMS and Patch the Kernel modules
+#region Patch the Kernel modules
 mkdir patched
-sed \
-	-e "s/@NAME@/%{NAME}/g" \
-	-e "s/@VERSION@/%{VERSION}/g" \
-	-i "%{SOURCE18}"
 tar -xf 'vmware-vmx/lib/modules/source/vmmon.tar' -C 'patched'
 patch -p2 --read-only=ignore --directory='patched/vmmon-only' < %{SOURCE20}
 tar -xf 'vmware-vmx/lib/modules/source/vmnet.tar' -C 'patched'
 patch -p2 --read-only=ignore --directory='patched/vmnet-only' < %{SOURCE21}
 rm -f vmware-vmx/lib/modules/source/{vmmon,vmnet}.tar
 #endregion
+
+%build
+cd extracted/patched
+for module in \
+	vmmon-only \
+	vmnet-only
+do
+	%{__make} -j %{getncpus} KVERSION=%{kernel}.%{_arch} -C $module
+done
 
 %install
 ## Replicate the install order of vmware-installer, but install VMX first because of appLoader
@@ -140,7 +171,7 @@ mkdir -p %{buildroot}%{_bindir}
 ln -s ${installer_dir}/vmware-installer %{buildroot}%{_bindir}/vmware-installer
 
 mkdir -p %{buildroot}%{_sysconfdir}/vmware-installer
-install -Dm 644 bootstrap %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
+%{__install} -Dm 644 bootstrap %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
 sed -i -e "s,@@VMWARE_INSTALLER@@,${installer_dir}," %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
 sed -i -e "s,@@VERSION@@,${installer_version}," %{buildroot}%{_sysconfdir}/vmware-installer/bootstrap
 
@@ -168,10 +199,10 @@ register_component
 popd
 #endregion
 #region VMware Bootstrap
-install -Dm 644 %{SOURCE8} %{buildroot}%{_sysconfdir}/vmware/bootstrap
+%{__install} -Dm 644 %{SOURCE8} %{buildroot}%{_sysconfdir}/vmware/bootstrap
 #endregion
 #region VMware Config
-install -Dm 644 %{SOURCE10} %{buildroot}%{_sysconfdir}/vmware/config
+%{__install} -Dm 644 %{SOURCE10} %{buildroot}%{_sysconfdir}/vmware/config
 sed -i -e "s,@@VERSION@@,%{semantic_version}," %{buildroot}%{_sysconfdir}/vmware/config
 sed -i -e "s,@@BUILD@@,%{build_number}," %{buildroot}%{_sysconfdir}/vmware/config
 sed -i -e "s,@@PREFIXDIR@@,%{_exec_prefix}," %{buildroot}%{_sysconfdir}/vmware/config
@@ -200,13 +231,13 @@ cp -r lib/share %{buildroot}%{_exec_prefix}/lib/vmware/
 cp -r lib/modules %{buildroot}%{_exec_prefix}/lib/vmware/
 cp -r lib/include %{buildroot}%{_exec_prefix}/lib/vmware/
 
-install -Dm 644 extra/modules.xml %{buildroot}%{_exec_prefix}/lib/vmware/modules/
+%{__install} -Dm 644 extra/modules.xml %{buildroot}%{_exec_prefix}/lib/vmware/modules/
 
 ln -s appLoader %{buildroot}%{_exec_prefix}/lib/vmware/bin/vmware-vmblock-fuse
 ln -s %{_exec_prefix}/lib/vmware/icu %{buildroot}%{_sysconfdir}/vmware/icu
 
 ## Replace vmware-modconfig with simple error dialog
-install -Dm 755 %{SOURCE12} %{buildroot}%{_bindir}/vmware-modconfig
+%{__install} -Dm 755 %{SOURCE12} %{buildroot}%{_bindir}/vmware-modconfig
 sed -i -e "s,@@ETCDIR@@,%{_sysconfdir}/vmware," %{buildroot}%{_bindir}/vmware-modconfig
 
 register_component
@@ -226,9 +257,9 @@ pushd vmware-usbarbitrator
 
 ## Use custom systemd service
 #cp -r vmware-usbarbitrator/etc/init.d/* %\{buildroot}%\{_exec_prefix}/lib/vmware/scripts/init/
-#install -Dm 644 vmware-usbarbitrator/systemd/vmware-USBArbitrator.service %\{buildroot}%\{_exec_prefix}/lib/systemd/system/vmware-USBArbitrator.service
-install -Dm 644 %{SOURCE15} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.service
-install -Dm 644 %{SOURCE17} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.path
+#%{__install} -Dm 644 vmware-usbarbitrator/systemd/vmware-USBArbitrator.service %\{buildroot}%\{_exec_prefix}/lib/systemd/system/vmware-USBArbitrator.service
+%{__install} -Dm 644 %{SOURCE15} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.service
+%{__install} -Dm 644 %{SOURCE17} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-usbarbitrator.path
 
 cp -r bin/* %{buildroot}%{_bindir}/
 ln -s appLoader %{buildroot}%{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
@@ -247,19 +278,19 @@ popd
 #region VMware Tools for Windows Vista or later
 pushd vmware-tools-windows
 
-install -Dm 644 windows.iso %{iso_dir}/windows.iso
+%{__install} -Dm 644 windows.iso %{iso_dir}/windows.iso
 
 register_component
 popd
 #endregion
 #region Other VMware Tools Images
-install -Dm 644 %{SOURCE1} %{iso_dir}/linux.iso
-install -Dm 644 %{SOURCE2} %{iso_dir}/linuxPreGlibc25.iso
-install -Dm 644 %{SOURCE3} %{iso_dir}/netware.iso
-install -Dm 644 %{SOURCE4} %{iso_dir}/solaris.iso
-install -Dm 644 %{SOURCE5} %{iso_dir}/winPre2k.iso
-install -Dm 644 %{SOURCE6} %{iso_dir}/winPreVista.iso
-install -Dm 644 %{SOURCE7} %{iso_dir}/winVista.iso
+%{__install} -Dm 644 %{SOURCE1} %{iso_dir}/linux.iso
+%{__install} -Dm 644 %{SOURCE2} %{iso_dir}/linuxPreGlibc25.iso
+%{__install} -Dm 644 %{SOURCE3} %{iso_dir}/netware.iso
+%{__install} -Dm 644 %{SOURCE4} %{iso_dir}/solaris.iso
+%{__install} -Dm 644 %{SOURCE5} %{iso_dir}/winPre2k.iso
+%{__install} -Dm 644 %{SOURCE6} %{iso_dir}/winPreVista.iso
+%{__install} -Dm 644 %{SOURCE7} %{iso_dir}/winVista.iso
 
 for iso in \
 	linux \
@@ -335,7 +366,7 @@ mkdir -p %{buildroot}%{_exec_prefix}/lib/vmware-vix
 cp -r lib/* %{buildroot}%{_exec_prefix}/lib/vmware-vix/
 cp -r bin/* %{buildroot}%{_bindir}/
 
-install -Dm 644 %{SOURCE9} %{buildroot}%{_sysconfdir}/vmware-vix/bootstrap
+%{__install} -Dm 644 %{SOURCE9} %{buildroot}%{_sysconfdir}/vmware-vix/bootstrap
 
 mkdir -p %{buildroot}%{_includedir}/vmware-vix
 cp -r include/* %{buildroot}%{_includedir}/vmware-vix
@@ -393,30 +424,31 @@ done
 register_component
 popd
 #endregion
-#region VMWare Networks Services
-install -Dm 644 %{SOURCE13} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks-configuration.service
-install -Dm 644 %{SOURCE14} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.service
-install -Dm 644 %{SOURCE16} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.path
-#endregion
-#region Configure Kmods
-install -Dm 644 %{SOURCE18} %{dkms_dir}/dkms.conf
-install -Dm 644 %{SOURCE19} %{dkms_dir}/Makefile
-cp -r patched/vmmon-only %{dkms_dir}/
-cp -r patched/vmnet-only %{dkms_dir}/
+#region Install Kernel Modules
+pushd patched
+%{__install} -Dm 755 vmmon.o %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmmon.ko
+%{__install} -Dm 755 vmnet.o %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmnet.ko
+find %{buildroot}%{_exec_prefix}/lib/modules -type f -name *.ko -exec xz --compress --check=crc32 --lzma2=dict=1MiB {} \;
 
-install -Dm 644 %{SOURCE22} %{buildroot}%{_exec_prefix}/lib/modules-load.d/vmware.conf
+%{__install} -Dm 644 %{SOURCE22} %{buildroot}%{_exec_prefix}/lib/modules-load.d/vmware.conf
+popd
+#endregion
+#region VMWare Networks Services
+%{__install} -Dm 644 %{SOURCE13} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks-configuration.service
+%{__install} -Dm 644 %{SOURCE14} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.service
+%{__install} -Dm 644 %{SOURCE16} %{buildroot}%{_exec_prefix}/lib/systemd/system/vmware-networks.path
 #endregion
 #region Enable macOS Guests
 %if %{with unlocker}
 	## Edit unlocker.py to operate on buildroot
 	sed -i -e "s|%{_exec_prefix}/lib/vmware/|%{buildroot}%{_exec_prefix}/lib/vmware/|" %{SOURCE23}
-	python3 %{SOURCE23}
+	%{__python3} %{SOURCE23}
 	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI32.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI32.ROM
 	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI64.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI64.ROM
 	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-32.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-32.ROM
 	%{SOURCE27} %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-64.ROM %{SOURCE24} -o %{buildroot}%{_exec_prefix}/lib/vmware/roms/EFI20-64.ROM
-	install -Dm 644 %{SOURCE25} %{iso_dir}/darwin.iso
-	install -Dm 644 %{SOURCE26} %{iso_dir}/darwinPre15.iso
+	%{__install} -Dm 644 %{SOURCE25} %{iso_dir}/darwin.iso
+	%{__install} -Dm 644 %{SOURCE26} %{iso_dir}/darwinPre15.iso
 	for iso in \
 		darwin \
 		darwinPre15
@@ -426,11 +458,10 @@ install -Dm 644 %{SOURCE22} %{buildroot}%{_exec_prefix}/lib/modules-load.d/vmwar
 	done
 %endif
 #endregion
+
 %check
 sqlite3 %{installer_database} 'select * FROM components'
 sqlite3 %{installer_database} 'select * FROM settings'
-test -d %{dkms_dir}/vmmon-only
-test -d %{dkms_dir}/vmnet-only
 for iso in \
 	windows \
 	linux \
@@ -451,20 +482,81 @@ do
 	test -s %{iso_dir}/${iso}.iso
 done
 %endif
+for module in \
+	vmmon \
+	vmnet
+do
+	test -s %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/${module}.ko.xz
+done
 
 %post
-semanage fcontext --add --type vmware_host_exec_t %{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
+[ $1 -eq 1 ] && semanage fcontext --add --type vmware_host_exec_t %{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
 restorecon %{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
-dkms add -q -m %{NAME} -v %{VERSION} --rpm_safe_upgrade
-dkms install -q -m %{NAME} -v %{VERSION} --force || true
-
-%preun
-dkms remove -q -m %{NAME} -v %{VERSION} --all --rpm_safe_upgrade || true
 
 %postun
-if [ $1 -eq 0 ]; then
-	semanage fcontext --delete --type vmware_host_exec_t %{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
+[ $1 -eq 0 ] && semanage fcontext --delete --type vmware_host_exec_t %{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
+
+%post -n kmod-vmware
+if [ -f %{key} ] && [ -f %{cert} ]
+then
+	cd %{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra
+	find . -type f -regextype posix-extended -regex '.*vm(mon|net)\.ko\.xz' -exec xz --decompress {} \;
+	find . -type f -regextype posix-extended -regex '.*vm(mon|net)\.ko' \
+		-exec %{_usrsrc}/kernels/%{kernel}.%{_arch}/scripts/sign-file sha256 %{key} %{cert} {} \; \
+		-exec xz --compress --check=crc32 --lzma2=dict=1MiB {} \;
+else
+	echo 'MOK not found, not signing vmmon.ko and vmnet.ko!'
+	return 1
 fi
+
+%triggerin -n kmod-vmware -- kmod-vmware
+mkdir -p %{_localstatedir}/lib/rpm-state/kmods
+rpm -ql kmod-vmware-%{?epoch:%{epoch}:}%{version}-%{release}.%{_arch} | grep -E '%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/.*\.ko(\.gz|\.bz2|\.xz|\.zst)?$' >> %{_localstatedir}/lib/rpm-state/kmods/weak-modules
+
+%triggerun -n kmod-vmware -- kmod-vmware
+mkdir -p %{_localstatedir}/lib/rpm-state/kmods
+rpm -ql kmod-vmware-%{?epoch:%{epoch}:}%{version}-%{release}.%{_arch} | grep -E '%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/.*\.ko(\.gz|\.bz2|\.xz|\.zst)?$' >> %{_localstatedir}/lib/rpm-state/kmods/weak-modules
+
+%preun -n kmod-vmware
+mkdir -p %{_localstatedir}/lib/rpm-state/kmods
+rpm -ql kmod-vmware-%{?epoch:%{epoch}:}%{version}-%{release}.%{_arch} | grep -E '%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/.*\.ko(\.gz|\.bz2|\.xz|\.zst)?$' >> %{_localstatedir}/lib/rpm-state/kmods/weak-modules-remove
+
+%define kmod_posttrans \
+if [ -f %{_localstatedir}/lib/rpm-state/kmods/weak-modules ]\
+then\
+	while read -r MODULE\
+	do\
+		if [ -f "$MODULE" ]\
+		then\
+			printf '%s\\n' "$MODULE" >> %{_localstatedir}/lib/rpm-state/kmods/weak-modules-add\
+		fi\
+	done < %{_localstatedir}/lib/rpm-state/kmods/weak-modules\
+	rm -f %{_localstatedir}/lib/rpm-state/kmods/weak-modules\
+fi\
+if [ -f %{_localstatedir}/lib/rpm-state/kmods/weak-modules-remove ]\
+then\
+	modules=( $(cat %{_localstatedir}/lib/rpm-state/kmods/weak-modules-remove | sort -u -V -t '/' -k 5 -k 4,4) )\
+	rm -f %{_localstatedir}/lib/rpm-state/kmods/weak-modules-remove\
+	if [ -f %{_localstatedir}/lib/rpm-state/kmods/weak-modules-add ]\
+	then\
+		printf '%s\\n' "${modules[@]}" | %{_sbindir}/weak-modules --remove-modules --no-initramfs\
+	else\
+		printf '%s\\n' "${modules[@]}" | %{_sbindir}/weak-modules --remove-modules\
+	fi\
+fi\
+if [ -f %{_localstatedir}/lib/rpm-state/kmods/weak-modules-add ]\
+then\
+	modules=( $(cat %{_localstatedir}/lib/rpm-state/kmods/weak-modules-add | sort -u -V -t '/' -k 5 -k 4,4) )\
+	rm -f %{_localstatedir}/lib/rpm-state/kmods/weak-modules-add\
+	printf '%s\\n' "${modules[@]}" | %{_sbindir}/weak-modules --add-modules\
+fi\
+if [ -d %{_localstatedir}/lib/rpm-state/kmods ]\
+then\
+	rmdir --ignore-fail-on-non-empty %{_localstatedir}/lib/rpm-state/kmods\
+fi\
+
+%posttrans -n kmod-vmware %{kmod_posttrans}
+%postuntrans -n kmod-vmware %{kmod_posttrans}
 
 #region files
 %files
@@ -475,7 +567,6 @@ fi
 %ghost %{_sysconfdir}/vmware-tools/
 %{_sysconfdir}/vmware-vix/
 %{_includedir}/vmware-vix/
-%{_exec_prefix}/lib/modules-load.d/vmware.conf
 %{_exec_prefix}/lib/systemd/system/vmware-networks-configuration.service
 %{_exec_prefix}/lib/systemd/system/vmware-networks.path
 %{_exec_prefix}/lib/systemd/system/vmware-networks.service
@@ -540,8 +631,6 @@ fi
 %{_datadir}/icons/hicolor/scalable/mimetypes/application-x-vmware-vm-legacy.svg
 %{_datadir}/icons/hicolor/scalable/mimetypes/application-x-vmware-vm.svg
 %{_datadir}/icons/hicolor/scalable/mimetypes/application-x-vmware-vmfoundry.svg
-
-%{_usrsrc}/%{NAME}-%{VERSION}/
 
 %doc %{_datadir}/doc/vmware-vix/
 %doc %{_datadir}/man/man1/vmware.1.gz
@@ -620,6 +709,12 @@ fi
 %attr(4111, -, -) %{_exec_prefix}/lib/vmware/bin/vmware-vmx
 %attr(4111, -, -) %{_exec_prefix}/lib/vmware/bin/vmware-vmx-debug
 %attr(4111, -, -) %{_exec_prefix}/lib/vmware/bin/vmware-vmx-stats
+
+%files -n kmod-vmware
+%defattr(0644, root, root, 0755)
+%verify(not md5 size mtime)%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmmon.ko.xz
+%verify(not md5 size mtime)%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmnet.ko.xz
+%{_exec_prefix}/lib/modules-load.d/vmware.conf
 
 #endregion
 

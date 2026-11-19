@@ -5,4 +5,4 @@ set -e
 ETCDIR=@@ETCDIR@@
 . $ETCDIR/bootstrap
 
-exec "$LIBDIR"/vmware/bin/vmware-zenity --error --text "Something went wrong when loading the VMware kernel modules. If this persists after a reboot, check DKMS for errors."
+exec "$LIBDIR"/vmware/bin/vmware-zenity --error --text "Something went wrong when loading the VMware kernel modules. If this persists after a reboot, check weak-modules for errors."
