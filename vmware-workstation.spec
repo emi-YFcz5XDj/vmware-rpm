@@ -1,7 +1,7 @@
 Name: vmware-workstation
-Version: 26H1
-%define semantic_version 26.0.0
-%define build_number 25388281
+Version: 26H1u1
+%define semantic_version 26.0.1
+%define build_number 25688693
 %define kernel 6.12.0-264.16.1.el10_3
 Release: %autorelease
 Summary: Desktop Hypervisor
@@ -426,8 +426,8 @@ popd
 #endregion
 #region Install Kernel Modules
 pushd patched
-%{__install} -Dm 755 vmmon.o %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmmon.ko
-%{__install} -Dm 755 vmnet.o %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmnet.ko
+%{__install} -Dm 755 vmmon.o %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/misc/vmmon.ko
+%{__install} -Dm 755 vmnet.o %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/net/vmnet.ko
 find %{buildroot}%{_exec_prefix}/lib/modules -type f -name *.ko -exec xz --compress --check=crc32 --lzma2=dict=1MiB {} \;
 
 %{__install} -Dm 644 %{SOURCE22} %{buildroot}%{_exec_prefix}/lib/modules-load.d/vmware.conf
@@ -482,12 +482,9 @@ do
 	test -s %{iso_dir}/${iso}.iso
 done
 %endif
-for module in \
-	vmmon \
-	vmnet
-do
-	test -s %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/${module}.ko.xz
-done
+find %{buildroot}%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra \
+	-type f -regextype posix-extended -regex '.*vm(mon|net)\.ko\.xz' \
+	-exec test -s {} \;
 
 %post
 [ $1 -eq 1 ] && semanage fcontext --add --type vmware_host_exec_t %{_exec_prefix}/lib/vmware/bin/vmware-usbarbitrator
@@ -712,8 +709,8 @@ fi\
 
 %files -n kmod-vmware
 %defattr(0644, root, root, 0755)
-%verify(not md5 size mtime)%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmmon.ko.xz
-%verify(not md5 size mtime)%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/vmnet.ko.xz
+%verify(not md5 size mtime)%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/misc/vmmon.ko.xz
+%verify(not md5 size mtime)%{_exec_prefix}/lib/modules/%{kernel}.%{_arch}/extra/net/vmnet.ko.xz
 %{_exec_prefix}/lib/modules-load.d/vmware.conf
 
 #endregion
